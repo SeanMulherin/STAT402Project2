@@ -1,0 +1,104 @@
+---
+title: "Analyzing The Influence of Biological Factors vs. Lifestyle Habits on Stroke Victims"
+author: "Group 4"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: html_document
+---
+
+Biological Factors
+
+| | |
+| --- | --- |
+| gender | categorical |
+| age | numeric |
+| hypertension | categorical |
+| heart_disease | categorical |
+| avg_glucose_level |
+| bmi | categorical |
+
+
+Lifestyle Habits:
+
+- ever_married
+- work_type
+- Residence_type
+- smoking_status 
+
+```{r setup, echo=F}
+set.seed(10);
+library(ggplot2);
+library(dplyr);
+library(knitr);
+library(car);
+
+
+load_stroke_data <- function(path) {
+    read.csv(path, header = T, na.strings = "N/A");
+}
+
+prep_stroke_data <- function(stroke_data, training_proportion) {
+    stroke_data <- na.omit(stroke_data);
+    
+    n <- nrow(stroke_data);
+    num_training <- n * training_proportion;
+    training_i <- sample.int(n, num_training);
+    
+    list(
+        training = stroke_data[training_i, ],
+        test = stroke_data[-training_i, ]
+    );
+}
+
+stroke <- prep_stroke_data(
+    load_stroke_data("healthcare-dataset-stroke-data.csv"),
+    training_proportion = 0.8
+);
+# knitr::kable(head(stroke, 25));
+```
+
+
+## EDA
+```{r eda, include=T}
+###### Biological Variable Selection #######
+b1 <- lm(stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi, data = stroke$training)
+summary(b1)
+
+####### Lifestyle Variable Selection #######
+l1 <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
+summary(l1)
+
+####### Equality of Variance #######
+homoscedasticity_test <- function(pred){
+  p <- bartlett.test(stroke ~ pred, data = stroke$training)$p.value
+  if(p > 0.05) {return("Assumption of Equality of Variance Failed")}
+  else {return("Assumption of Equality of Variance Holds")}
+}
+homoscedasticity_test(stroke$training$ever_married)
+homoscedasticity_test(stroke$training$work_type)
+homoscedasticity_test(stroke$training$Residence_type)
+homoscedasticity_test(stroke$training$smoking_status)
+homoscedasticity_test(stroke$training$hypertension)
+homoscedasticity_test(stroke$training$heart_disease)
+stroke$training$gender[which(stroke$training$gender == "Other")] <- "Male"
+homoscedasticity_test(stroke$training$gender) # gender fails equality of variance
+
+####### Collinearity #######
+vif(b1) # no scores > 5 so no collinearity
+vif(l1)# no scores > 5 so no collinearity
+```
+
+
+
+## Model Selection
+Compare Logistic Regression and Decision Tree/Regression
+
+
+
+## Variable Selection
+Forward Selection 
+
+
+
+
+
+
