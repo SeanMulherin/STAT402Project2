@@ -2,7 +2,7 @@
 title: "Analyzing The Influence of Biological Factors vs. Lifestyle Habits on Stroke Victims"
 author: "Group 4"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
-output: html_document
+output: pdf_document
 ---
 
 Biological Factors
@@ -30,6 +30,8 @@ library(ggplot2);
 library(dplyr);
 library(knitr);
 library(car);
+library(ROCR);
+library(corrplot); #correlation heat map
 
 
 load_stroke_data <- function(path) {
@@ -38,6 +40,7 @@ load_stroke_data <- function(path) {
 
 prep_stroke_data <- function(stroke_data, training_proportion) {
     stroke_data <- na.omit(stroke_data);
+    stroke_data <- stroke_data[-which(stroke_data$gender == "Other"), ] #removes row with gender = 'other'
     
     n <- nrow(stroke_data);
     num_training <- n * training_proportion;
@@ -59,13 +62,26 @@ stroke <- prep_stroke_data(
 
 ## EDA
 ```{r eda, include=T}
-###### Biological Variable Selection #######
-b1 <- lm(stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi, data = stroke$training)
-summary(b1)
+####### Normality #######
+histo_plots <- function(){
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = age), width = 2) + theme_classic() + ggtitle("Age")
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = avg_glucose_level), width = .001) + theme_classic() + ggtitle("Glucose Level")
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = bmi), width = 10) + theme_classic() + ggtitle("BMI")
+}
 
-####### Lifestyle Variable Selection #######
-l1 <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
-summary(l1)
+# transform avg_glucose_level because it's right skewed
+symbox_plot <- symbox(~avg_glucose_level, data = stroke$training)
+stroke$training$avg_glucose_level <- stroke$training$avg_glucose_level^(-1)
+
+####### Correlation #######
+# we should do this for all variables by converting to dummy, I selected only numeric ones for now
+correlation_values <- stroke$training |> select("age", "hypertension", "heart_disease", "avg_glucose_level", "bmi") |> cor() 
+corr_plot <- corrplot.mixed(correlation_values,
+                 lower = "number", upper = "circle", tl.pos = "l", diag = "l",
+                 main = "Correlation Matrix")
 
 ####### Equality of Variance #######
 homoscedasticity_test <- function(pred){
@@ -73,31 +89,67 @@ homoscedasticity_test <- function(pred){
   if(p > 0.05) {return("Assumption of Equality of Variance Failed")}
   else {return("Assumption of Equality of Variance Holds")}
 }
-homoscedasticity_test(stroke$training$ever_married)
-homoscedasticity_test(stroke$training$work_type)
-homoscedasticity_test(stroke$training$Residence_type)
-homoscedasticity_test(stroke$training$smoking_status)
-homoscedasticity_test(stroke$training$hypertension)
-homoscedasticity_test(stroke$training$heart_disease)
-stroke$training$gender[which(stroke$training$gender == "Other")] <- "Male"
-homoscedasticity_test(stroke$training$gender) # gender fails equality of variance
+#homoscedasticity_test(stroke$training$ever_married)
+#homoscedasticity_test(stroke$training$work_type)
+#homoscedasticity_test(stroke$training$Residence_type) # fails equality of variance
+#homoscedasticity_test(stroke$training$smoking_status)
+#homoscedasticity_test(stroke$training$hypertension)
+#homoscedasticity_test(stroke$training$heart_disease)
+#homoscedasticity_test(stroke$training$gender) # fails equality of variance
 
 ####### Collinearity #######
-vif(b1) # no scores > 5 so no collinearity
-vif(l1)# no scores > 5 so no collinearity
+logreg <- glm(stroke ~., data = stroke$training, family = "binomial") ## log reg model
+vif(logreg)
+```
+
+## Variable and Model Selection
+```{r model, include=T}
+log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
+log_sig <- glm(stroke ~ age + hypertension + heart_disease + avg_glucose_level + smoking_status, 
+              data = stroke$training, family = "binomial") # only significant variables
+
+# Compare models
+anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so we use simpler model
+
+# still need to do an interaction effect analysis
+
+
+
+
+# predict outcome variable using optimal model
+log_pred <- predict(log_sig, stroke$test, type = "response")
+log_pred <- ifelse(log_pred >= 0.5, 1, 0)
 ```
 
 
+## Model Accuracy
+```{r accuracy, include=T}
+model_accuracy <- function(model_pred){
+  accuracy <- mean(model_pred == stroke$test$stroke)
+  return(paste("Accuracy =", round(accuracy, 4)))
+}
 
-## Model Selection
-Compare Logistic Regression and Decision Tree/Regression
+roc <- function(model_pred){
+  roc_pred <- prediction(model_pred, stroke$test$stroke)
+  roc_perf <- performance(roc_pred, measure = "tpr", x.measure = "fpr")
+  
+  auc <- performance(roc_pred, measure = "auc")
+  auc <- auc@y.values[[1]]
+   
+  # Plotting
+  plot(roc_perf, main = "ROC CURVE", col = "blue", lwd = 1.5)
+  legend(.6, .4, round(auc, 4), title = "AUC", cex = 1)
+}
+
+confusion_matrix <- function(model_pred) {
+  table(model_pred, stroke$test$stroke)
+}
 
 
-
-## Variable Selection
-Forward Selection 
-
-
+model_accuracy(log_pred)
+roc(log_pred)
+confusion_matrix(log_pred)
+```
 
 
 
