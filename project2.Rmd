@@ -24,7 +24,7 @@ Lifestyle Habits:
 - Residence_type
 - smoking_status 
 
-```{r setup, echo=F}
+```{r setup, include=F}
 set.seed(10);
 library(ggplot2);
 library(dplyr);
@@ -56,14 +56,19 @@ stroke <- prep_stroke_data(
 ```
 
 
-## EDA
-Hey everyone. Here's a cool blurb.
-```{r eda, include=T}
-###### Biological Variable Selection #######
-b1 <- lm(stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi, data = stroke$training)
-summary(b1)
+# EDA
 
-####### Lifestyle Variable Selection #######
+### Biological Variables
+```{r eda-bio, echo=F}
+b1 <- lm(
+    stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
+    data = stroke$training
+);
+
+summary(b1);
+```
+### Lifestyle Variables
+```{R eda-life, echo=F}
 l1 <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
 summary(l1)
 ```
