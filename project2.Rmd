@@ -211,8 +211,7 @@ summary(interaction_model);
 restricted_model <- glm(
     stroke ~ 
         hypertension * age + 
-        age * avg_glucose_level + 
-        ever_married,
+        age * avg_glucose_level,
     data = stroke$training
 );
 summary(restricted_model);
