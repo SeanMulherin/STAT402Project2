@@ -24,20 +24,42 @@ Lifestyle Habits:
 - Residence_type
 - smoking_status 
 
-```{r setup, echo=F}
+```{r setup, include=F}
 set.seed(10);
+
 library(ggplot2);
 library(dplyr);
 library(knitr);
-
 
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
 }
 
-prep_stroke_data <- function(stroke_data, training_proportion) {
+prep_stroke_data <- function(stroke_data) {
     stroke_data <- na.omit(stroke_data);
+    stroke_data$smoking_status <- factor(
+        stroke_data$smoking_status,
+        levels = c(
+            'never smoked',
+            'formerly smoked',
+            'smokes'
+        )
+    );
+    stroke_data$work_type <- factor(
+        stroke_data$work_type,
+        levels = c(
+            'Never_worked',
+            'Private',
+            'Self-employed',
+            'Govt_job',
+            'children'
+        )
+    );
     
+    return(stroke_data);
+}
+
+split_stroke_data <- function(stroke_data, training_proportion) {
     n <- nrow(stroke_data);
     num_training <- n * training_proportion;
     training_i <- sample.int(n, num_training);
@@ -48,24 +70,55 @@ prep_stroke_data <- function(stroke_data, training_proportion) {
     );
 }
 
-stroke <- prep_stroke_data(
-    load_stroke_data("healthcare-dataset-stroke-data.csv"),
-    training_proportion = 0.8
+stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> 
+    prep_stroke_data() |>
+    split_stroke_data(training_proportion = 0.8);
+```
+
+
+# EDA
+
+### Biological Variables
+```{r eda-bio, echo=F}
+biological_model <- lm(
+    stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
+    data = stroke$training
 );
-# knitr::kable(head(stroke, 25));
+summary(biological_model);
+```
+### Lifestyle Variables
+```{R eda-life, echo=F}
+lifestyle_model <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
+summary(lifestyle_model);
 ```
 
-
-## EDA
-Hey everyone. Here's a cool blurb.
-```{r eda, include=T}
-###### Biological Variable Selection #######
-b1 <- lm(stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi, data = stroke$training)
-summary(b1)
-
-####### Lifestyle Variable Selection #######
-l1 <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
-summary(l1)
+### Interactions
+This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
+```{r eda-interaction, echo=F}
+interaction_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        bmi * age + 
+        avg_glucose_level * age +
+        avg_glucose_level * bmi +
+        heart_disease * age +
+        smoking_status +
+        Residence_type + 
+        ever_married,
+    data = stroke$training
+);
+summary(interaction_model);
 ```
 
+### Restricted Model
+```{r eda-restricted, echo=F}
+restricted_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        age * avg_glucose_level + 
+        ever_married,
+    data = stroke$training
+);
+summary(restricted_model);
+```
 
