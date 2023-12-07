@@ -217,5 +217,3 @@ restricted_model <- glm(
 );
 summary(restricted_model);
 ```
-
->>>>>>> 9d9822d19e0c8f59fb2f570737fdea7152c6f15b
