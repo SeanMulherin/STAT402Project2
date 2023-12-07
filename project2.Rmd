@@ -60,17 +60,33 @@ stroke <- prep_stroke_data(
 
 ### Biological Variables
 ```{r eda-bio, echo=F}
-b1 <- lm(
+biological_model <- lm(
     stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
     data = stroke$training
 );
-
-summary(b1);
+summary(biological_model);
 ```
 ### Lifestyle Variables
 ```{R eda-life, echo=F}
-l1 <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
-summary(l1)
+lifestyle_model <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
+summary(lifestyle_model);
 ```
+
+### Interactions
+```{r eda-interaction, echo=F}
+interaction_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        bmi * age + 
+        avg_glucose_level * age +
+        heart_disease * age +
+        smoking_status +
+        Residence_type + 
+        ever_married,
+    data = stroke$training
+);
+summary(interaction_model);
+```
+
 
 
