@@ -24,7 +24,7 @@ Lifestyle Habits:
 - Residence_type
 - smoking_status 
 
-```{r setup, echo=F}
+```{r setup, include=F}
 set.seed(10);
 library(ggplot2);
 library(dplyr);
@@ -80,7 +80,7 @@ stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |>
 
 
 ## EDA
-```{r eda, include=T}
+```{r eda, echo=F}
 ####### Normality #######
 histo_plots <- function() {
   ggplot(stroke$training) +
@@ -123,7 +123,7 @@ vif(logreg)
 ```
 
 ## Variable and Model Selection
-```{r model, include=T}
+```{r model, echo=F}
 log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
 log_sig <- glm(stroke ~ age + hypertension + heart_disease + avg_glucose_level + smoking_status, 
               data = stroke$training, family = "binomial") # only significant variables
@@ -137,20 +137,20 @@ anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so 
 
 
 # predict outcome variable using optimal model
-log_pred <- predict(log_sig, stroke$test, type = "response");
+log_pred <- predict(log_sig, stroke$training, type = "response");
 classified_pred <- ifelse(log_pred >= 0.5, 1, 0);
 ```
 
 
 ## Model Accuracy
-```{r accuracy, include=T}
+```{r accuracy, echo=F}
 model_accuracy <- function(model_pred){
-  accuracy <- mean(model_pred == stroke$test$stroke)
+  accuracy <- mean(model_pred == stroke$training$stroke)
   return(paste("Accuracy =", round(accuracy, 4)))
 }
 
 roc <- function(model_pred){
-  roc_pred <- prediction(model_pred, stroke$test$stroke)
+  roc_pred <- prediction(model_pred, stroke$training$stroke)
   roc_perf <- performance(roc_pred, measure = "tpr", x.measure = "fpr")
   
   auc <- performance(roc_pred, measure = "auc")
@@ -162,7 +162,7 @@ roc <- function(model_pred){
 }
 
 confusion_matrix <- function(model_pred) {
-  table(model_pred, stroke$test$stroke)
+  table(model_pred, stroke$training$stroke)
 }
 
 
@@ -216,4 +216,40 @@ restricted_model <- glm(
     data = stroke$training
 );
 summary(restricted_model);
+```
+
+#ROC Curve:
+```{r, echo=F}
+log_pred <- predict(restricted_model, stroke$training, type = "response")
+```
+
+
+```{r, echo=F}
+roc(log_pred)
+```
+Using Training data to determine Threshold:
+```{r, echo=F}
+log_pred_2 <- ifelse(log_pred >= 0.05, 1, 0)
+model_accuracy(log_pred_2)
+confusion_matrix(log_pred_2)
+```
+
+Now for Test data:
+```{r, echo=F}
+model_accuracy_test <- function(model_pred){
+  accuracy <- mean(model_pred == stroke$test$stroke)
+  return(paste("Accuracy =", round(accuracy, 4)))
+}
+confusion_matrix_test <- function(model_pred) {
+  table(model_pred, stroke$test$stroke)
+}
+```
+
+
+
+```{r, echo=F}
+log_pred_test <- predict(restricted_model, stroke$test, type = "response")
+log_pred_class_test <- ifelse(log_pred_test >= 0.05, 1, 0)
+model_accuracy_test(log_pred_class_test)
+confusion_matrix_test(log_pred_class_test)
 ```
