@@ -2,7 +2,7 @@
 title: "Analyzing The Influence of Biological Factors vs. Lifestyle Habits on Stroke Victims"
 author: "Group 4"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
-output: pdf_document
+output: html_document
 ---
 
 Biological Factors
@@ -33,15 +33,36 @@ library(car);
 library(ROCR);
 library(corrplot); #correlation heat map
 
-
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
 }
 
-prep_stroke_data <- function(stroke_data, training_proportion) {
+prep_stroke_data <- function(stroke_data) {
     stroke_data <- na.omit(stroke_data);
-    stroke_data <- stroke_data[-which(stroke_data$gender == "Other"), ] #removes row with gender = 'other'
+    stroke_data <- stroke_data[-which(stroke_data$gender == "Other"), ];
+    stroke_data$smoking_status <- factor(
+        stroke_data$smoking_status,
+        levels = c(
+            'never smoked',
+            'formerly smoked',
+            'smokes'
+        )
+    );
+    stroke_data$work_type <- factor(
+        stroke_data$work_type,
+        levels = c(
+            'Never_worked',
+            'Private',
+            'Self-employed',
+            'Govt_job',
+            'children'
+        )
+    );
     
+    return(stroke_data);
+}
+
+split_stroke_data <- function(stroke_data, training_proportion) {
     n <- nrow(stroke_data);
     num_training <- n * training_proportion;
     training_i <- sample.int(n, num_training);
@@ -52,24 +73,23 @@ prep_stroke_data <- function(stroke_data, training_proportion) {
     );
 }
 
-stroke <- prep_stroke_data(
-    load_stroke_data("healthcare-dataset-stroke-data.csv"),
-    training_proportion = 0.8
-);
-# knitr::kable(head(stroke, 25));
+stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> 
+    prep_stroke_data() |> 
+    split_stroke_data(training_proportion = 0.8);
 ```
 
 
 ## EDA
 ```{r eda, include=T}
 ####### Normality #######
-histo_plots <- function(){
+histo_plots <- function() {
   ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = age), width = 2) + theme_classic() + ggtitle("Age")
+    geom_bar(mapping = aes(x = age), width = 2) + theme_classic() + ggtitle("Age");
+    
   ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = avg_glucose_level), width = .001) + theme_classic() + ggtitle("Glucose Level")
+    geom_bar(mapping = aes(x = avg_glucose_level), width = .001) + theme_classic() + ggtitle("Glucose Level");
   ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = bmi), width = 10) + theme_classic() + ggtitle("BMI")
+    geom_bar(mapping = aes(x = bmi), width = 10) + theme_classic() + ggtitle("BMI");
 }
 
 # transform avg_glucose_level because it's right skewed
@@ -117,8 +137,8 @@ anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so 
 
 
 # predict outcome variable using optimal model
-log_pred <- predict(log_sig, stroke$test, type = "response")
-log_pred <- ifelse(log_pred >= 0.5, 1, 0)
+log_pred <- predict(log_sig, stroke$test, type = "response");
+classified_pred <- ifelse(log_pred >= 0.5, 1, 0);
 ```
 
 
@@ -146,11 +166,56 @@ confusion_matrix <- function(model_pred) {
 }
 
 
-model_accuracy(log_pred)
-roc(log_pred)
-confusion_matrix(log_pred)
+model_accuracy(classified_pred);
+# roc(log_pred)
+confusion_matrix(classified_pred)
 ```
 
 
+# EDA
 
+### Biological Variables
+```{r eda-bio, echo=F}
+biological_model <- lm(
+    stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
+    data = stroke$training
+);
+summary(biological_model);
+```
+### Lifestyle Variables
+```{R eda-life, echo=F}
+lifestyle_model <- lm(stroke ~ ever_married + work_type + Residence_type + smoking_status, data = stroke$training)
+summary(lifestyle_model);
+```
 
+### Interactions
+This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
+```{r eda-interaction, echo=F}
+interaction_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        bmi * age + 
+        avg_glucose_level * age +
+        avg_glucose_level * bmi +
+        heart_disease * age +
+        smoking_status +
+        Residence_type + 
+        ever_married,
+    data = stroke$training
+);
+summary(interaction_model);
+```
+
+### Restricted Model
+```{r eda-restricted, echo=F}
+restricted_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        age * avg_glucose_level + 
+        ever_married,
+    data = stroke$training
+);
+summary(restricted_model);
+```
+
+>>>>>>> 9d9822d19e0c8f59fb2f570737fdea7152c6f15b
