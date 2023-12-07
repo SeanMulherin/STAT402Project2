@@ -24,12 +24,14 @@ Lifestyle Habits:
 - Residence_type
 - smoking_status 
 
-```{r setup, include=F}
+```{r setup, echo=F}
 set.seed(10);
-
 library(ggplot2);
 library(dplyr);
 library(knitr);
+library(car);
+library(ROCR);
+library(corrplot); #correlation heat map
 
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
@@ -37,6 +39,7 @@ load_stroke_data <- function(path) {
 
 prep_stroke_data <- function(stroke_data) {
     stroke_data <- na.omit(stroke_data);
+    stroke_data <- stroke_data[-which(stroke_data$gender == "Other"), ];
     stroke_data$smoking_status <- factor(
         stroke_data$smoking_status,
         levels = c(
@@ -71,8 +74,101 @@ split_stroke_data <- function(stroke_data, training_proportion) {
 }
 
 stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> 
-    prep_stroke_data() |>
+    prep_stroke_data() |> 
     split_stroke_data(training_proportion = 0.8);
+```
+
+
+## EDA
+```{r eda, include=T}
+####### Normality #######
+histo_plots <- function() {
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = age), width = 2) + theme_classic() + ggtitle("Age");
+    
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = avg_glucose_level), width = .001) + theme_classic() + ggtitle("Glucose Level");
+  ggplot(stroke$training) +
+    geom_bar(mapping = aes(x = bmi), width = 10) + theme_classic() + ggtitle("BMI");
+}
+
+# transform avg_glucose_level because it's right skewed
+symbox_plot <- symbox(~avg_glucose_level, data = stroke$training)
+stroke$training$avg_glucose_level <- stroke$training$avg_glucose_level^(-1)
+
+####### Correlation #######
+# we should do this for all variables by converting to dummy, I selected only numeric ones for now
+correlation_values <- stroke$training |> select("age", "hypertension", "heart_disease", "avg_glucose_level", "bmi") |> cor() 
+corr_plot <- corrplot.mixed(correlation_values,
+                 lower = "number", upper = "circle", tl.pos = "l", diag = "l",
+                 main = "Correlation Matrix")
+
+####### Equality of Variance #######
+homoscedasticity_test <- function(pred){
+  p <- bartlett.test(stroke ~ pred, data = stroke$training)$p.value
+  if(p > 0.05) {return("Assumption of Equality of Variance Failed")}
+  else {return("Assumption of Equality of Variance Holds")}
+}
+#homoscedasticity_test(stroke$training$ever_married)
+#homoscedasticity_test(stroke$training$work_type)
+#homoscedasticity_test(stroke$training$Residence_type) # fails equality of variance
+#homoscedasticity_test(stroke$training$smoking_status)
+#homoscedasticity_test(stroke$training$hypertension)
+#homoscedasticity_test(stroke$training$heart_disease)
+#homoscedasticity_test(stroke$training$gender) # fails equality of variance
+
+####### Collinearity #######
+logreg <- glm(stroke ~., data = stroke$training, family = "binomial") ## log reg model
+vif(logreg)
+```
+
+## Variable and Model Selection
+```{r model, include=T}
+log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
+log_sig <- glm(stroke ~ age + hypertension + heart_disease + avg_glucose_level + smoking_status, 
+              data = stroke$training, family = "binomial") # only significant variables
+
+# Compare models
+anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so we use simpler model
+
+# still need to do an interaction effect analysis
+
+
+
+
+# predict outcome variable using optimal model
+log_pred <- predict(log_sig, stroke$test, type = "response");
+classified_pred <- ifelse(log_pred >= 0.5, 1, 0);
+```
+
+
+## Model Accuracy
+```{r accuracy, include=T}
+model_accuracy <- function(model_pred){
+  accuracy <- mean(model_pred == stroke$test$stroke)
+  return(paste("Accuracy =", round(accuracy, 4)))
+}
+
+roc <- function(model_pred){
+  roc_pred <- prediction(model_pred, stroke$test$stroke)
+  roc_perf <- performance(roc_pred, measure = "tpr", x.measure = "fpr")
+  
+  auc <- performance(roc_pred, measure = "auc")
+  auc <- auc@y.values[[1]]
+   
+  # Plotting
+  plot(roc_perf, main = "ROC CURVE", col = "blue", lwd = 1.5)
+  legend(.6, .4, round(auc, 4), title = "AUC", cex = 1)
+}
+
+confusion_matrix <- function(model_pred) {
+  table(model_pred, stroke$test$stroke)
+}
+
+
+model_accuracy(classified_pred);
+# roc(log_pred)
+confusion_matrix(classified_pred)
 ```
 
 
@@ -122,3 +218,4 @@ restricted_model <- glm(
 summary(restricted_model);
 ```
 
+>>>>>>> 9d9822d19e0c8f59fb2f570737fdea7152c6f15b
