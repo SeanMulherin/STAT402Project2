@@ -26,18 +26,40 @@ Lifestyle Habits:
 
 ```{r setup, include=F}
 set.seed(10);
+
 library(ggplot2);
 library(dplyr);
 library(knitr);
-
 
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
 }
 
-prep_stroke_data <- function(stroke_data, training_proportion) {
+prep_stroke_data <- function(stroke_data) {
     stroke_data <- na.omit(stroke_data);
+    stroke_data$smoking_status <- factor(
+        stroke_data$smoking_status,
+        levels = c(
+            'never smoked',
+            'formerly smoked',
+            'smokes'
+        )
+    );
+    stroke_data$work_type <- factor(
+        stroke_data$work_type,
+        levels = c(
+            'Never_worked',
+            'Private',
+            'Self-employed',
+            'Govt_job',
+            'children'
+        )
+    );
     
+    return(stroke_data);
+}
+
+split_stroke_data <- function(stroke_data, training_proportion) {
     n <- nrow(stroke_data);
     num_training <- n * training_proportion;
     training_i <- sample.int(n, num_training);
@@ -48,11 +70,9 @@ prep_stroke_data <- function(stroke_data, training_proportion) {
     );
 }
 
-stroke <- prep_stroke_data(
-    load_stroke_data("healthcare-dataset-stroke-data.csv"),
-    training_proportion = 0.8
-);
-# knitr::kable(head(stroke, 25));
+stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> 
+    prep_stroke_data() |>
+    split_stroke_data(training_proportion = 0.8);
 ```
 
 
