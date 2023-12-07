@@ -93,12 +93,14 @@ summary(lifestyle_model);
 ```
 
 ### Interactions
+This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
 ```{r eda-interaction, echo=F}
 interaction_model <- glm(
     stroke ~ 
         hypertension * age + 
         bmi * age + 
         avg_glucose_level * age +
+        avg_glucose_level * bmi +
         heart_disease * age +
         smoking_status +
         Residence_type + 
@@ -108,5 +110,15 @@ interaction_model <- glm(
 summary(interaction_model);
 ```
 
-
+### Restricted Model
+```{r eda-restricted, echo=F}
+restricted_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        age * avg_glucose_level + 
+        ever_married,
+    data = stroke$training
+);
+summary(restricted_model);
+```
 
