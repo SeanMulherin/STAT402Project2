@@ -252,3 +252,22 @@ log_pred_class_test <- ifelse(log_pred_test >= 0.05, 1, 0)
 model_accuracy_test(log_pred_class_test)
 confusion_matrix_test(log_pred_class_test)
 ```
+
+Log Odds and Confidence Interval
+```{r final_interpretation, echo=F}
+restricted_model <- glm(
+    stroke ~ 
+        hypertension * age + 
+        age * avg_glucose_level,
+    data = stroke$training
+);
+summary(restricted_model);
+## Log Odds
+exp(coef(summary(restricted_model))[, 1])
+
+
+## Confidence Interval Plot
+install.packages("sjPlot");
+library(sjPlot);
+plot_model(restricted_model)
+```
