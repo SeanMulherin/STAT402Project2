@@ -26,13 +26,30 @@ Lifestyle Habits:
 
 ```{r setup, include=F}
 set.seed(10);
+
 library(ggplot2);
 library(dplyr);
 library(knitr);
 library(car);
 library(ROCR);
 library(corrplot); #correlation heat map
+```
 
+```{r colors, include=F}
+UCLA_colors <- list(
+    ucla_blue = '#2774AE',
+    ucla_gold = '#FFD100',
+    darkest_blue = '#003B5C',
+    darker_blue = '#005587',
+    lighter_blue = '#8BB8E8',
+    lightest_blue = '#DAEBFE',
+    darkest_gold = '#FFB81C',
+    darker_gold = '#FFC72C'
+);
+```
+
+
+```{r data-prep, include=F}
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
 }
