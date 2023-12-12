@@ -95,7 +95,6 @@ stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |>
     split_stroke_data(training_proportion = 0.8);
 ```
 
-
 ## EDA
 ```{r eda, echo=F}
 ####### Normality #######
@@ -139,6 +138,19 @@ logreg <- glm(stroke ~., data = stroke$training, family = "binomial") ## log reg
 vif(logreg)
 ```
 
+### Age Groups
+
+```{r age-groups, echo=F}
+group_ages <- function(stroke_data, breaks) {
+    stroke_data$age_group <- factor(cut(stroke_data$age, breaks = breaks));
+    return(stroke_data);
+}
+
+age_breaks <- c(0, 40, 60, 85);
+stroke$training <- group_ages(stroke$training, breaks = age_breaks);
+stroke$test <- group_ages(stroke$test, breaks = age_breaks);
+```
+
 ## Variable and Model Selection
 ```{r model, echo=F}
 log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
@@ -157,7 +169,6 @@ anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so 
 log_pred <- predict(log_sig, stroke$training, type = "response");
 classified_pred <- ifelse(log_pred >= 0.5, 1, 0);
 ```
-
 
 ## Model Accuracy
 ```{r accuracy, echo=F}
