@@ -151,6 +151,23 @@ stroke$training <- group_ages(stroke$training, breaks = age_breaks);
 stroke$test <- group_ages(stroke$test, breaks = age_breaks);
 ```
 
+```{r plot-age, echo=F}
+ggplot(
+    stroke$training |> arrange(stroke) |> count(age_group, stroke), 
+    aes(x = age_group, y = n, fill = factor(stroke, levels = c(1, 0)))) + 
+        geom_bar(stat = 'identity', position = 'stack') +
+        scale_fill_manual(
+            labels = c('Stroke', 'No Stroke'),
+            values = c(UCLA_colors$lighter_blue, UCLA_colors$darkest_blue),
+            name = ''
+        ) + theme(
+            legend.text = element_text(size=11),
+            axis.text = element_text(size=9),
+            axis.title = element_text(size=14)
+        ) +
+        xlab('Age Group (Years)') + ylab('Number of Patients');
+```
+
 ## Variable and Model Selection
 ```{r model, echo=F}
 log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
