@@ -324,6 +324,13 @@ restricted_model <- glm(
 summary(restricted_model);
 ```
 
+### Coefficients
+```{r coeff, echo=F}
+data.frame(
+    coefficient = round(exp(restricted_model$coefficients), digits = 3)
+);
+```
+
 #ROC Curve:
 ```{r, echo=F}
 log_pred <- predict(restricted_model, stroke$training, type = "response")
