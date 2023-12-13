@@ -364,13 +364,21 @@ model_accuracy_test(log_pred_class_test)
 confusion_matrix_test(log_pred_class_test)
 ```
 
-Log Odds and Confidence Interval
+Log Odds, Confidence Intervals, and P_Values
 ```{r final_interpretation, echo=F}
+## P_value
 summary(restricted_model);
 ## Log Odds
-exp(coef(summary(restricted_model))[, 1])
+coef(summary(restricted_model))[, 1];
+## Confidence Intervals
+conf_int <- confint(restricted_model)[-1, ]
+lower_bound <- conf_int[, 1]
+upper_bound <- conf_int[, 2]
+mean_points <- apply(conf_int, 1, mean)
 
-
-## Confidence Interval Plot
-plot_model(restricted_model)
+#Confidence Interval Plot
+plot_model(restricted_model, 
+           transform = NULL, 
+           colors = c(UCLA_colors$darkest_gold, UCLA_colors$darkest_blue)) + 
+          theme_bw()
 ```
