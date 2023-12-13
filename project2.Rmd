@@ -96,6 +96,7 @@ stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |>
     split_stroke_data(training_proportion = 0.8);
 ```
 
+
 ## EDA
 ```{r eda, echo=F}
 ####### Normality #######
@@ -110,8 +111,7 @@ histo_plots <- function() {
 }
 
 # transform avg_glucose_level because it's right skewed
-symbox_plot <- symbox(~avg_glucose_level, data = stroke$training)
-stroke$training$avg_glucose_level <- stroke$training$avg_glucose_level^(-1)
+symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
 
 ####### Correlation #######
 # we should do this for all variables by converting to dummy, I selected only numeric ones for now
@@ -133,10 +133,6 @@ homoscedasticity_test <- function(pred){
 #homoscedasticity_test(stroke$training$hypertension)
 #homoscedasticity_test(stroke$training$heart_disease)
 #homoscedasticity_test(stroke$training$gender) # fails equality of variance
-
-####### Collinearity #######
-logreg <- glm(stroke ~., data = stroke$training, family = "binomial") ## log reg model
-vif(logreg)
 ```
 
 ### Age Groups
@@ -167,6 +163,61 @@ ggplot(
             axis.title = element_text(size=14)
         ) +
         xlab('Age Group (Years)') + ylab('Number of Patients');
+```
+
+### Blood Glucose Level
+```{r diabetes, echo=F}
+split_diabetes <- function(stroke_data, breakpoint) {
+    labels <- c('Normal', 'High');
+    group_assignments <- as.numeric(cut(
+        stroke_data$avg_glucose_level,
+        breaks = c(0, breakpoint, Inf),
+        labels = FALSE
+    ));
+    stroke_data$diabetes <- factor(
+        labels[group_assignments],
+        levels = labels
+    );
+    return(stroke_data);
+}
+
+diabetes_threshold <- 125;
+stroke$training <- split_diabetes(stroke$training, diabetes_threshold);
+stroke$test <- split_diabetes(stroke$test, diabetes_threshold);
+```
+
+```{r plot-diabetes, echo=F}
+ggplot(stroke$training, aes(x = diabetes, y = avg_glucose_level)) +
+    geom_boxplot(fill = UCLA_colors$lighter_blue) +
+    xlab('Blood Sugar Group') + ylab('Average Glucose Level');
+
+ggplot(stroke$training, aes(x = avg_glucose_level)) +
+    geom_histogram(fill = UCLA_colors$lighter_blue) +
+    xlab('Average Glucose Level (mg/dL)') + ylab('Number of Patients');
+
+
+# ggplot(stroke$training, aes(x = avg_glucose_level)) +
+#     geom_histogram(
+#         fill = ifelse(min(stroke$training$avg_glucose_level):max(stroke$training$avg_glucose_level) > 125, UCLA_colors$ucla_blue, UCLA_colors$ucla_gold)
+#     ) +
+#     xlab('Average Glucose Level (mg/dL)') + ylab('Number of Patients');
+```
+
+
+### Colinearity
+```{r vif, echo=F}
+full_age_model <- glm(
+    stroke ~ . - age_group,
+    data = stroke$training,
+    family = "binomial"
+);
+full_age_group_model <- glm(
+    stroke ~ . - age,
+    data = stroke$training,
+    family = "binomial"
+);
+vif(full_age_model);
+vif(full_age_group_model);
 ```
 
 ## Variable and Model Selection
@@ -270,7 +321,7 @@ summary(interaction_model);
 ```{r eda-restricted, echo=F}
 restricted_model <- glm(
     stroke ~ 
-        age_group + hypertension + age_group : avg_glucose_level,
+        age_group + hypertension + age_group : diabetes,
     data = stroke$training,
     family = 'binomial'
 );
