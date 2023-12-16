@@ -33,7 +33,7 @@ library(knitr);
 library(car);
 library(ROCR);
 library(sjPlot);
-library(corrplot); #correlation heat map
+library(ggcorrplot); #correlation heat map
 ```
 
 ```{r colors, include=F}
@@ -112,27 +112,54 @@ histo_plots <- function() {
 
 # transform avg_glucose_level because it's right skewed
 symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
+```
 
+```{r correlation, echo=F}
 ####### Correlation #######
 # we should do this for all variables by converting to dummy, I selected only numeric ones for now
-correlation_values <- stroke$training |> select("age", "hypertension", "heart_disease", "avg_glucose_level", "bmi") |> cor() 
-corr_plot <- corrplot.mixed(correlation_values,
-                 lower = "number", upper = "circle", tl.pos = "l", diag = "l",
-                 main = "Correlation Matrix")
-
-####### Equality of Variance #######
-homoscedasticity_test <- function(pred){
-  p <- bartlett.test(stroke ~ pred, data = stroke$training)$p.value
-  if(p > 0.05) {return("Assumption of Equality of Variance Failed")}
-  else {return("Assumption of Equality of Variance Holds")}
+stroke_correlation <- function(stroke_data) {
+    prep_factor <- function(x) as.numeric(factor(x));
+    
+    stroke_data$gender <- prep_factor(stroke_data$gender);
+    stroke_data$Residence_type <- prep_factor(stroke_data$Residence_type);
+    stroke_data$work_type <- prep_factor(stroke_data$work_type);
+    stroke_data$ever_married <- prep_factor(stroke_data$ever_married);
+    stroke_data$heart_disease <- prep_factor(stroke_data$heart_disease);
+    stroke_data$hypertension <- prep_factor(stroke_data$hypertension);
+    
+    stroke_data$smoking_status <- prep_factor(stroke_data$smoking_status);
+    stroke_data$smoking_status[is.na(stroke_data$smoking_status)] <- 0;
+    
+    cor(stroke_data |> subset(select = (-c(stroke))));
 }
-#homoscedasticity_test(stroke$training$ever_married)
-#homoscedasticity_test(stroke$training$work_type)
-#homoscedasticity_test(stroke$training$Residence_type) # fails equality of variance
-#homoscedasticity_test(stroke$training$smoking_status)
-#homoscedasticity_test(stroke$training$hypertension)
-#homoscedasticity_test(stroke$training$heart_disease)
-#homoscedasticity_test(stroke$training$gender) # fails equality of variance
+
+ggcorrplot(
+    stroke_correlation(stroke$training) |> round(2),
+    method = 'circle',
+    ggtheme = ggplot2::theme_gray,
+    type = 'upper',
+    colors = c(UCLA_colors$ucla_blue, 'white', UCLA_colors$ucla_gold)
+);
+```
+
+```{r homoscedasticity, echo=F}
+####### Equality of Variance #######
+homoscedasticity_test <- function(pred) {
+    p <- bartlett.test(stroke ~ pred, data = stroke$training)$p.value;
+    if (p > 0.05) {
+        return("Assumption of Equality of Variance Failed");
+    } else {
+        return("Assumption of Equality of Variance Holds");
+    }
+}
+
+homoscedasticity_test(stroke$training$ever_married)
+homoscedasticity_test(stroke$training$work_type)
+homoscedasticity_test(stroke$training$Residence_type) # Fails equality of variance
+homoscedasticity_test(stroke$training$smoking_status)
+homoscedasticity_test(stroke$training$hypertension)
+homoscedasticity_test(stroke$training$heart_disease)
+homoscedasticity_test(stroke$training$gender) # Fails equality of variance
 ```
 
 ### Age Groups
@@ -199,21 +226,51 @@ ggplot(stroke$training, aes(x = diabetes, y = avg_glucose_level)) +
     xlab('Blood Sugar Group') + ylab('Average Glucose Level');
 ```
 
+```{r hypertension-eda, echo=F}
+ggplot(aggregate(stroke ~ hypertension, stroke$training, FUN = mean), aes(x = hypertension, y = stroke)) +
+    geom_bar(stat = 'identity')
+```
+
 
 ### Colinearity
 ```{r vif, echo=F}
-full_age_model <- glm(
-    stroke ~ . - age_group,
+full_vif <- as.data.frame(vif(glm(
+    stroke ~ . - id - age_group - diabetes,
     data = stroke$training,
     family = "binomial"
-);
-full_age_group_model <- glm(
-    stroke ~ . - age,
-    data = stroke$training,
-    family = "binomial"
-);
-vif(full_age_model);
-vif(full_age_group_model);
+)));
+full_vif$variable <- rownames(full_vif);
+
+ggplot(full_vif, aes(x = GVIF, y = variable)) + 
+    geom_bar(stat = 'identity', fill = UCLA_colors$ucla_blue) +
+    xlim(0, 6) + scale_x_continuous(breaks = 1:6) + 
+    geom_vline(
+        xintercept = 5,
+        linetype = "dashed", 
+        color = UCLA_colors$lighter_blue,
+        size = 0.5
+    ) + xlab('VIF') + ylab('Variable');
+```
+
+### Hypertension
+```{r hypertension-eda}
+hypertension_proportions <- stroke$training |> group_by(hypertension, stroke) |>
+  summarise(n = n()) |>
+  mutate(freq = n / sum(n)) |> ungroup();
+
+ggplot(
+    hypertension_proportions,
+    aes(x = hypertension, y = freq, fill = factor(stroke, levels = 1:0))
+) + geom_bar(
+    stat = 'identity'
+    # fill = ifelse(hypertension_proportions$stroke, UCLA_colors$lighter_blue, UCLA_colors$darker_blue)
+) + xlab('Hypertension') + ylab('Proportion of Patients') +
+    scale_x_continuous(breaks = 0:1, labels = c('No', 'Yes')) +
+    scale_fill_manual(
+            labels = c('Stroke', 'No Stroke'),
+            values = c(UCLA_colors$lighter_blue, UCLA_colors$darkest_blue),
+            name = ''
+        );
 ```
 
 ## Variable and Model Selection
@@ -277,7 +334,7 @@ biological_model <- glm(
 summary(biological_model);
 
 biological_age_group_model <- glm(
-    stroke ~ gender + age_group + hypertension + heart_disease + avg_glucose_level + bmi,
+    stroke ~ gender + age_group + hypertension + heart_disease + diabetes + bmi,
     data = stroke$training,
     family = 'binomial'
 );
@@ -292,6 +349,19 @@ lifestyle_model <- glm(
 );
 
 summary(lifestyle_model);
+```
+
+### Full Model
+```{r full-model, echo=F}
+full_model <- glm(
+    stroke ~ age_group + gender + diabetes + heart_disease + hypertension + bmi + 
+        ever_married + work_type + Residence_type + smoking_status,
+    data = stroke$training,
+    family = 'binomial'
+);
+
+summary(full_model);
+data.frame(coef = round(full_model$coefficients, digits = 3));
 ```
 
 ### Interactions
