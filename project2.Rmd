@@ -24,7 +24,7 @@ Lifestyle Habits:
 - Residence_type
 - smoking_status 
 
-```{r setup, include=F}
+```{r setup}
 set.seed(10);
 
 library(ggplot2);
@@ -33,10 +33,12 @@ library(knitr);
 library(car);
 library(ROCR);
 library(sjPlot);
-library(ggcorrplot); #correlation heat map
+library(ggcorrplot);
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 ```
 
-```{r colors, include=F}
+```{r colors}
 UCLA_colors <- list(
     ucla_blue = '#2774AE',
     ucla_gold = '#FFD100',
@@ -50,7 +52,7 @@ UCLA_colors <- list(
 ```
 
 
-```{r data-prep, include=F}
+```{r data-prep}
 load_stroke_data <- function(path) {
     read.csv(path, header = T, na.strings = "N/A");
 }
@@ -97,7 +99,7 @@ stroke <- split_stroke_data(stroke, training_proportion = 0.8);
 
 
 # EDA
-```{r eda, echo=F}
+```{r eda}
 ggplot(stroke$training, aes(x = age)) +
     geom_histogram() + ggtitle("Age");
     
@@ -108,13 +110,8 @@ ggplot(stroke$training, aes(x = bmi)) +
     geom_histogram() + ggtitle("BMI");
 ```
 
-### Average Glucose Level
-```{r avg-glucose}
-symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
-```
-
 ## Correlation
-```{r correlation, echo=F}
+```{r correlation}
 # we should do this for all variables by converting to dummy, I selected only numeric ones for now
 stroke_correlation <- cor(stroke$training |> subset(select = c(age, avg_glucose_level, bmi)));
 
@@ -122,34 +119,31 @@ ggcorrplot(
     stroke_correlation,
     method = 'circle',
     ggtheme = ggplot2::theme_gray,
-    type = 'upper',
     colors = c(UCLA_colors$ucla_blue, 'white', UCLA_colors$ucla_gold)
 );
 ```
 
-```{r homoscedasticity, echo=F}
+```{r homoscedasticity}
 ####### Equality of Variance #######
-homoscedasticity_test <- function(pred) {
-    p <- bartlett.test(stroke ~ pred, data = stroke$training)$p.value;
-    if (p > 0.05) {
-        return("Assumption of Equality of Variance Failed");
-    } else {
-        return("Assumption of Equality of Variance Holds");
-    }
+homoscedasticity_test <- function(stroke_data) {
+    predictors <- colnames(stroke_data |> subset(select = -c(stroke, id, age, avg_glucose_level, bmi)))
+    p <- sapply(
+        predictors,
+        function(column) bartlett.test(stroke ~ stroke_data[, column], data = stroke_data)$p.value
+    );
+    
+    data.frame(
+        p_value = p,
+        equality_of_variance = p < 0.05
+    );
 }
 
-homoscedasticity_test(stroke$training$ever_married)
-homoscedasticity_test(stroke$training$work_type)
-homoscedasticity_test(stroke$training$Residence_type) # Fails equality of variance
-homoscedasticity_test(stroke$training$smoking_status)
-homoscedasticity_test(stroke$training$hypertension)
-homoscedasticity_test(stroke$training$heart_disease)
-homoscedasticity_test(stroke$training$gender) # Fails equality of variance
+knitr::kable(homoscedasticity_test(stroke$training));
 ```
 
-### Age Groups
+## Age Groups
 
-```{r age-groups, echo=F}
+```{r age-groups}
 group_ages <- function(stroke_data, breaks) {
     stroke_data$age_group <- factor(cut(stroke_data$age, breaks = breaks));
     return(stroke_data);
@@ -160,7 +154,7 @@ stroke$training <- group_ages(stroke$training, breaks = age_breaks);
 stroke$test <- group_ages(stroke$test, breaks = age_breaks);
 ```
 
-```{r plot-age, echo=F}
+```{r plot-age}
 ggplot(
     stroke$training |> arrange(stroke) |> count(age_group, stroke), 
     aes(x = age_group, y = n, fill = factor(stroke, levels = c(1, 0)))) + 
@@ -177,8 +171,12 @@ ggplot(
         xlab('Age Group (Years)') + ylab('Number of Patients');
 ```
 
-### Blood Glucose Level
-```{r diabetes, echo=F}
+## Average Glucose Level
+```{r avg-glucose}
+symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
+```
+
+```{r diabetes}
 split_diabetes <- function(stroke_data, breakpoint) {
     labels <- c('Normal', 'High');
     group_assignments <- as.numeric(cut(
@@ -198,7 +196,7 @@ stroke$training <- split_diabetes(stroke$training, diabetes_threshold);
 stroke$test <- split_diabetes(stroke$test, diabetes_threshold);
 ```
 
-```{r plot-diabetes, echo=F}
+```{r plot-diabetes}
 ggplot(stroke$training, aes(x = avg_glucose_level)) +
     geom_histogram(
         fill = UCLA_colors$lighter_blue,
@@ -211,33 +209,7 @@ ggplot(stroke$training, aes(x = diabetes, y = avg_glucose_level)) +
     xlab('Blood Sugar Group') + ylab('Average Glucose Level');
 ```
 
-```{r hypertension-eda, echo=F}
-ggplot(aggregate(stroke ~ hypertension, stroke$training, FUN = mean), aes(x = hypertension, y = stroke)) +
-    geom_bar(stat = 'identity')
-```
-
-
-### Colinearity
-```{r vif, echo=F}
-full_vif <- as.data.frame(vif(glm(
-    stroke ~ . - id - age_group - diabetes,
-    data = stroke$training,
-    family = "binomial"
-)));
-full_vif$variable <- rownames(full_vif);
-
-ggplot(full_vif, aes(x = GVIF, y = variable)) + 
-    geom_bar(stat = 'identity', fill = UCLA_colors$ucla_blue) +
-    xlim(0, 6) + scale_x_continuous(breaks = 1:6) + 
-    geom_vline(
-        xintercept = 5,
-        linetype = "dashed", 
-        color = UCLA_colors$lighter_blue,
-        size = 0.5
-    ) + xlab('VIF') + ylab('Variable');
-```
-
-### Hypertension
+## Hypertension
 ```{r hypertension-eda}
 hypertension_proportions <- stroke$training |> group_by(hypertension, stroke) |>
   summarise(n = n()) |>
@@ -248,7 +220,6 @@ ggplot(
     aes(x = hypertension, y = freq, fill = factor(stroke, levels = 1:0))
 ) + geom_bar(
     stat = 'identity'
-    # fill = ifelse(hypertension_proportions$stroke, UCLA_colors$lighter_blue, UCLA_colors$darker_blue)
 ) + xlab('Hypertension') + ylab('Proportion of Patients') +
     scale_x_continuous(breaks = 0:1, labels = c('No', 'Yes')) +
     scale_fill_manual(
@@ -258,27 +229,108 @@ ggplot(
         );
 ```
 
-## Variable and Model Selection
-```{r model, echo=F}
-log_all <- glm(stroke ~ ., data = stroke$training, family = "binomial")
-log_sig <- glm(stroke ~ age + hypertension + heart_disease + avg_glucose_level + smoking_status, 
-              data = stroke$training, family = "binomial") # only significant variables
 
-# Compare models
-anova_summary <- anova(log_all, log_sig, test="Chisq") # insignificant p-val so we use simpler model
+## Colinearity
+```{r vif}
+full_vif <- as.data.frame(vif(glm(
+    stroke ~ . - id - age_group - diabetes,
+    data = stroke$training,
+    family = "binomial"
+)));
+full_vif$variable <- rownames(full_vif);
 
-# still need to do an interaction effect analysis
-
-
-
-
-# predict outcome variable using optimal model
-log_pred <- predict(log_sig, stroke$training, type = "response");
-classified_pred <- ifelse(log_pred >= 0.5, 1, 0);
+ggplot(full_vif, aes(x = GVIF, y = variable)) + 
+    geom_bar(stat = 'identity', fill = UCLA_colors$ucla_blue) +
+    scale_x_continuous(breaks = 1:6) + 
+    geom_vline(
+        xintercept = 5,
+        linetype = "dashed", 
+        color = UCLA_colors$lighter_blue,
+        size = 0.5
+    ) + xlab('VIF') + ylab('Variable');
 ```
 
-## Model Accuracy
-```{r accuracy, echo=F}
+### Biological Variables
+```{r eda-bio}
+biological_model <- glm(
+    stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
+    data = stroke$training,
+    family = 'binomial'
+);
+summary(biological_model);
+
+biological_age_group_model <- glm(
+    stroke ~ gender + age_group + hypertension + heart_disease + diabetes + bmi,
+    data = stroke$training,
+    family = 'binomial'
+);
+summary(biological_age_group_model);
+```
+### Lifestyle Variables
+```{R eda-life}
+lifestyle_model <- glm(
+    stroke ~ ever_married + work_type + Residence_type + smoking_status,
+    data = stroke$training,
+    family = 'binomial'
+);
+
+summary(lifestyle_model);
+```
+
+### Full Model
+```{r full-model}
+full_model <- glm(
+    stroke ~ age_group + gender + diabetes + heart_disease + hypertension + bmi + 
+        ever_married + work_type + Residence_type + smoking_status,
+    data = stroke$training,
+    family = 'binomial'
+);
+
+summary(full_model);
+data.frame(coef = round(full_model$coefficients, digits = 3));
+```
+
+### Interactions
+This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
+```{r eda-interaction}
+interaction_model <- glm(
+    stroke ~ 
+        hypertension * age_group + 
+        bmi * age_group + 
+        avg_glucose_level * age_group +
+        avg_glucose_level * bmi +
+        heart_disease * age_group +
+        smoking_status +
+        Residence_type + 
+        ever_married,
+    data = stroke$training,
+    family = 'binomial'
+);
+summary(interaction_model);
+```
+
+### Restricted Model
+```{r eda-restricted}
+restricted_model <- glm(
+    stroke ~ 
+        age_group + hypertension + age_group : diabetes,
+    data = stroke$training,
+    family = 'binomial'
+);
+summary(restricted_model);
+```
+
+### Coefficients
+```{r coeff}
+knitr::kable(
+    data.frame(
+        coefficient = round(exp(restricted_model$coefficients), digits = 3)
+    )
+);
+```
+
+# Model Accuracy
+```{r accuracy}
 model_accuracy <- function(model_pred){
   accuracy <- mean(model_pred == stroke$training$stroke)
   return(paste("Accuracy =", round(accuracy, 4)))
@@ -300,110 +352,20 @@ confusion_matrix <- function(model_pred) {
   table(model_pred, stroke$training$stroke)
 }
 
-
-model_accuracy(classified_pred);
-# roc(log_pred)
-confusion_matrix(classified_pred)
-```
-
-
-# EDA
-
-### Biological Variables
-```{r eda-bio, echo=F}
-biological_model <- glm(
-    stroke ~ gender + age + hypertension + heart_disease + avg_glucose_level + bmi,
-    data = stroke$training,
-    family = 'binomial'
-);
-summary(biological_model);
-
-biological_age_group_model <- glm(
-    stroke ~ gender + age_group + hypertension + heart_disease + diabetes + bmi,
-    data = stroke$training,
-    family = 'binomial'
-);
-summary(biological_age_group_model);
-```
-### Lifestyle Variables
-```{R eda-life, echo=F}
-lifestyle_model <- glm(
-    stroke ~ ever_married + work_type + Residence_type + smoking_status,
-    data = stroke$training,
-    family = 'binomial'
-);
-
-summary(lifestyle_model);
-```
-
-### Full Model
-```{r full-model, echo=F}
-full_model <- glm(
-    stroke ~ age_group + gender + diabetes + heart_disease + hypertension + bmi + 
-        ever_married + work_type + Residence_type + smoking_status,
-    data = stroke$training,
-    family = 'binomial'
-);
-
-summary(full_model);
-data.frame(coef = round(full_model$coefficients, digits = 3));
-```
-
-### Interactions
-This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
-```{r eda-interaction, echo=F}
-interaction_model <- glm(
-    stroke ~ 
-        hypertension * age_group + 
-        bmi * age_group + 
-        avg_glucose_level * age_group +
-        avg_glucose_level * bmi +
-        heart_disease * age_group +
-        smoking_status +
-        Residence_type + 
-        ever_married,
-    data = stroke$training,
-    family = 'binomial'
-);
-summary(interaction_model);
-```
-
-### Restricted Model
-```{r eda-restricted, echo=F}
-restricted_model <- glm(
-    stroke ~ 
-        age_group + hypertension + age_group : diabetes,
-    data = stroke$training,
-    family = 'binomial'
-);
-summary(restricted_model);
-```
-
-### Coefficients
-```{r coeff, echo=F}
-data.frame(
-    coefficient = round(exp(restricted_model$coefficients), digits = 3)
-);
-```
-
-#ROC Curve:
-```{r, echo=F}
 log_pred <- predict(restricted_model, stroke$training, type = "response")
 ```
 
 
-```{r, echo=F}
+```{r}
 roc(log_pred)
 ```
 Using Training data to determine Threshold:
-```{r, echo=F}
+
+```{r}
 log_pred_2 <- ifelse(log_pred >= 0.05, 1, 0)
 model_accuracy(log_pred_2)
 confusion_matrix(log_pred_2)
-```
 
-Now for Test data:
-```{r, echo=F}
 model_accuracy_test <- function(model_pred){
   accuracy <- mean(model_pred == stroke$test$stroke)
   return(paste("Accuracy =", round(accuracy, 4)))
@@ -415,7 +377,7 @@ confusion_matrix_test <- function(model_pred) {
 
 
 
-```{r, echo=F}
+```{r}
 log_pred_test <- predict(restricted_model, stroke$test, type = "response")
 log_pred_class_test <- ifelse(log_pred_test >= 0.05, 1, 0)
 model_accuracy_test(log_pred_class_test)
@@ -423,16 +385,16 @@ confusion_matrix_test(log_pred_class_test)
 ```
 
 Log Odds, Confidence Intervals, and P_Values
-```{r final_interpretation, echo=F}
+```{r final_interpretation}
 ## P_value
 summary(restricted_model);
 ## Log Odds
 coef(summary(restricted_model))[, 1];
 ## Confidence Intervals
-conf_int <- confint(restricted_model)[-1, ]
-lower_bound <- conf_int[, 1]
-upper_bound <- conf_int[, 2]
-mean_points <- apply(conf_int, 1, mean)
+conf_int <- confint(restricted_model)[-1, ];
+lower_bound <- conf_int[, 1];
+upper_bound <- conf_int[, 2];
+mean_points <- apply(conf_int, 1, mean);
 
 #Confidence Interval Plot
 plot_model(restricted_model, 
