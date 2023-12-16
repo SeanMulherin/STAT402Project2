@@ -287,44 +287,36 @@ full_model <- glm(
 );
 
 summary(full_model);
-data.frame(coef = round(full_model$coefficients, digits = 3));
 ```
-
-### Interactions
-This model includes all significant features from each set, plus targeted interaction effects for lifestyle and socio-economic factors that we hypothesize might have a relationship with health factors.
 ```{r eda-interaction}
 interaction_model <- glm(
     stroke ~ 
         hypertension * age_group + 
-        bmi * age_group + 
-        avg_glucose_level * age_group +
-        avg_glucose_level * bmi +
-        heart_disease * age_group +
-        smoking_status +
-        Residence_type + 
-        ever_married,
+        diabetes * age_group +
+        heart_disease,
     data = stroke$training,
     family = 'binomial'
 );
 summary(interaction_model);
 ```
 
-### Restricted Model
+### Final Model
+This model includes the most significant features from the restricted model, plus interaction effects between these significant factors that we hypothesize to have a relationship. Then, we performed further backwards selection to remove features which became less significant in combination with these interactions.
 ```{r eda-restricted}
-restricted_model <- glm(
+final_model <- glm(
     stroke ~ 
         age_group + hypertension + age_group : diabetes,
     data = stroke$training,
     family = 'binomial'
 );
-summary(restricted_model);
+summary(final_model);
 ```
 
 ### Coefficients
 ```{r coeff}
 knitr::kable(
     data.frame(
-        coefficient = round(exp(restricted_model$coefficients), digits = 3)
+        coefficient = round(exp(final_model$coefficients), digits = 3)
     )
 );
 ```
@@ -352,7 +344,7 @@ confusion_matrix <- function(model_pred) {
   table(model_pred, stroke$training$stroke)
 }
 
-log_pred <- predict(restricted_model, stroke$training, type = "response")
+log_pred <- predict(final_model, stroke$training, type = "response")
 ```
 
 
@@ -378,7 +370,7 @@ confusion_matrix_test <- function(model_pred) {
 
 
 ```{r}
-log_pred_test <- predict(restricted_model, stroke$test, type = "response")
+log_pred_test <- predict(final_model, stroke$test, type = "response")
 log_pred_class_test <- ifelse(log_pred_test >= 0.05, 1, 0)
 model_accuracy_test(log_pred_class_test)
 confusion_matrix_test(log_pred_class_test)
@@ -387,17 +379,17 @@ confusion_matrix_test(log_pred_class_test)
 Log Odds, Confidence Intervals, and P_Values
 ```{r final_interpretation}
 ## P_value
-summary(restricted_model);
+summary(final_model);
 ## Log Odds
-coef(summary(restricted_model))[, 1];
+coef(summary(final_model))[, 1];
 ## Confidence Intervals
-conf_int <- confint(restricted_model)[-1, ];
+conf_int <- confint(final_model)[-1, ];
 lower_bound <- conf_int[, 1];
 upper_bound <- conf_int[, 2];
 mean_points <- apply(conf_int, 1, mean);
 
 #Confidence Interval Plot
-plot_model(restricted_model, 
+plot_model(final_model, 
            transform = NULL, 
            colors = c(UCLA_colors$darkest_gold, UCLA_colors$darkest_blue)) + 
           theme_bw()
