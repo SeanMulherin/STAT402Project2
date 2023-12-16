@@ -91,50 +91,35 @@ split_stroke_data <- function(stroke_data, training_proportion) {
     );
 }
 
-stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> 
-    prep_stroke_data() |> 
-    split_stroke_data(training_proportion = 0.8);
+stroke <- load_stroke_data("healthcare-dataset-stroke-data.csv") |> prep_stroke_data();
+stroke <- split_stroke_data(stroke, training_proportion = 0.8);
 ```
 
 
-## EDA
+# EDA
 ```{r eda, echo=F}
-####### Normality #######
-histo_plots <- function() {
-  ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = age), width = 2) + theme_classic() + ggtitle("Age");
+ggplot(stroke$training, aes(x = age)) +
+    geom_histogram() + ggtitle("Age");
     
-  ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = avg_glucose_level), width = .001) + theme_classic() + ggtitle("Glucose Level");
-  ggplot(stroke$training) +
-    geom_bar(mapping = aes(x = bmi), width = 10) + theme_classic() + ggtitle("BMI");
-}
+ggplot(stroke$training, aes(x = avg_glucose_level)) +
+    geom_histogram() + ggtitle("Glucose Level");
+  
+ggplot(stroke$training, aes(x = bmi)) +
+    geom_histogram() + ggtitle("BMI");
+```
 
-# transform avg_glucose_level because it's right skewed
+### Average Glucose Level
+```{r avg-glucose}
 symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
 ```
 
+## Correlation
 ```{r correlation, echo=F}
-####### Correlation #######
 # we should do this for all variables by converting to dummy, I selected only numeric ones for now
-stroke_correlation <- function(stroke_data) {
-    prep_factor <- function(x) as.numeric(factor(x));
-    
-    stroke_data$gender <- prep_factor(stroke_data$gender);
-    stroke_data$Residence_type <- prep_factor(stroke_data$Residence_type);
-    stroke_data$work_type <- prep_factor(stroke_data$work_type);
-    stroke_data$ever_married <- prep_factor(stroke_data$ever_married);
-    stroke_data$heart_disease <- prep_factor(stroke_data$heart_disease);
-    stroke_data$hypertension <- prep_factor(stroke_data$hypertension);
-    
-    stroke_data$smoking_status <- prep_factor(stroke_data$smoking_status);
-    stroke_data$smoking_status[is.na(stroke_data$smoking_status)] <- 0;
-    
-    cor(stroke_data |> subset(select = (-c(stroke))));
-}
+stroke_correlation <- cor(stroke$training |> subset(select = c(age, avg_glucose_level, bmi)));
 
 ggcorrplot(
-    stroke_correlation(stroke$training) |> round(2),
+    stroke_correlation,
     method = 'circle',
     ggtheme = ggplot2::theme_gray,
     type = 'upper',
