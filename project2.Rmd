@@ -143,6 +143,13 @@ knitr::kable(homoscedasticity_test(stroke$training));
 
 ## Age Groups
 
+Patient ages are normally distributed in this dataset. Further, to solve the problem, we are not concerned with modeling the difference between individual years, but rather creating braoder "risk groups". It is important that these groups are both clinically relevant and statistically valid. After some experimentation, we opted to group patients by:
+- Under 40 years old
+- Between 40 and 60
+- 60 and above
+
+These groups have relatively even numbers of patients, and noticeably different proportions of stroke occurrences.
+
 ```{r age-groups}
 group_ages <- function(stroke_data, breaks) {
     stroke_data$age_group <- factor(cut(stroke_data$age, breaks = breaks));
@@ -172,9 +179,24 @@ ggplot(
 ```
 
 ## Average Glucose Level
+This numeric variable is clearly not normally distributed. It appears to be severly skewed.
+
 ```{r avg-glucose}
+
+ggplot(stroke$training, aes(x = avg_glucose_level)) +
+    geom_histogram(
+        fill = UCLA_colors$lighter_blue,
+        breaks = seq(55, 275, by = 5)
+    ) +
+    xlab('Average Glucose Level (mg/dL)') + ylab('Number of Patients');
+```
+
+Exploring some transformations, a -1 power transformation seems to be the only transformation that would result in a normal distribution.
+```{r}
 symbox_plot <- symbox(~avg_glucose_level, data = stroke$training);
 ```
+
+However, $x^{-1}$ scale would be difficult to interpret. It's also possible that this variable is bimodal. It's reasonable to imagine that there may be a second group of patients (near 200mg/dL) who have diabetes. With some research, 125mg/dL seems to be a common threshold for doctors to diagnose diabetes. Splitting the data at 125mg/dL results in two normally distributed groups. This is strong evidence of bimodality, and leads us to create a new categorical `diabetes` variable using this split.
 
 ```{r diabetes}
 split_diabetes <- function(stroke_data, breakpoint) {
@@ -197,13 +219,6 @@ stroke$test <- split_diabetes(stroke$test, diabetes_threshold);
 ```
 
 ```{r plot-diabetes}
-ggplot(stroke$training, aes(x = avg_glucose_level)) +
-    geom_histogram(
-        fill = UCLA_colors$lighter_blue,
-        breaks = seq(55, 275, by = 5)
-    ) +
-    xlab('Average Glucose Level (mg/dL)') + ylab('Number of Patients');
-
 ggplot(stroke$training, aes(x = diabetes, y = avg_glucose_level)) +
     geom_boxplot(fill = UCLA_colors$lighter_blue) +
     xlab('Blood Sugar Group') + ylab('Average Glucose Level');
